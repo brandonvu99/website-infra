@@ -110,14 +110,14 @@ Resources:
       Comment: String
       HostedZoneId: !Ref DNSProvider
       RecordSets:
-        - Name: brandonthe.gay
+        - Name: !Ref DomainName
           Type: A
           AliasTarget:
             DNSName: !GetAtt CloudFrontContentProvider.DomainName
             # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-route53-aliastarget.html
             # Z2FDTNDATAQYW2 "is always the hosted zone ID when you create an alias record that routes traffic to a CloudFront distribution"
             HostedZoneId: Z2FDTNDATAQYW2
-        - Name: www.brandonthe.gay
+        - Name: !Sub www.${DomainName}
           Type: A
           AliasTarget:
             DNSName: !GetAtt CloudFrontContentProvider.DomainName
