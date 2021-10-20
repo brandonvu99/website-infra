@@ -1,0 +1,126 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: brandonthe.gay
+  WebsiteBucketName:
+    Type: String
+    Default: brandonthe.gay
+  Region:
+    Type: String
+    Default: us-east-1
+
+
+Resources:
+  DNSProvider:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !Ref DomainName
+
+  SSLCert:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      SubjectAlternativeNames:
+        - !Sub www.${DomainName}
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref DNSProvider
+        - DomainName: !Sub www.${DomainName}
+          HostedZoneId: !Ref DNSProvider
+
+  CfOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: WebsiteBucketOAI
+
+  WebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref WebsiteBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+
+  WebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Id: AllowPublicReadAndCloudFrontAccess
+        Statement:
+          - Sid: AllowPublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub
+              - ${BucketArn}/*
+              - { BucketArn: !GetAtt WebsiteBucket.Arn }
+          - Sid: AllowCloudFrontGetObject
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CfOriginAccessIdentity}
+            Action: s3:GetObject
+            Resource: !Sub
+              - ${BucketArn}/*
+              - { BucketArn: !GetAtt WebsiteBucket.Arn }
+
+  CloudFrontContentProvider:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref DomainName
+          - !Sub www.${DomainName}
+        Enabled: true
+        IPV6Enabled: true
+        DefaultRootObject: index.html
+        DefaultCacheBehavior:
+          AllowedMethods: [GET, HEAD]
+          ForwardedValues: { QueryString: false }
+          TargetOriginId: !Sub ${WebsiteBucketName}.s3-website-us-east-1.amazonaws.com
+          ViewerProtocolPolicy: redirect-to-https
+        ViewerCertificate:
+          AcmCertificateArn: !Ref SSLCert
+          SslSupportMethod: sni-only
+        # Makes this CloudFrontDistribution deploy to the least amount of regions possible (to decrease costs)
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: !Sub ${WebsiteBucketName}.s3-website-us-east-1.amazonaws.com
+            DomainName: !Sub ${WebsiteBucketName}.s3-website-us-east-1.amazonaws.com
+            # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-cloudfront-distribution-customoriginconfig.html
+            # "An Amazon S3 bucket that is configured with static website hosting is a custom origin."
+            CustomOriginConfig:
+              # https://stackoverflow.com/questions/44825455/where-is-the-origin-protocol-policy-field-in-the-aws-cloudfront-console
+              # "CloudFront can still accept HTTPS connections from the browser, but the connection between CloudFront and S3 will always use HTTP, for a static website origin"
+              OriginProtocolPolicy: http-only
+
+  DNSProviderRecords:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: String
+      HostedZoneId: !Ref DNSProvider
+      RecordSets:
+        - Name: brandonthe.gay
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt CloudFrontContentProvider.DomainName
+            # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-route53-aliastarget.html
+            # Z2FDTNDATAQYW2 "is always the hosted zone ID when you create an alias record that routes traffic to a CloudFront distribution"
+            HostedZoneId: Z2FDTNDATAQYW2
+        - Name: www.brandonthe.gay
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt CloudFrontContentProvider.DomainName
+            # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-route53-aliastarget.html
+            # Z2FDTNDATAQYW2 "is always the hosted zone ID when you create an alias record that routes traffic to a CloudFront distribution"
+            HostedZoneId: Z2FDTNDATAQYW2
