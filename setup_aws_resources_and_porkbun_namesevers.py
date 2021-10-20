@@ -128,14 +128,14 @@ def update_name_servers_in_porkbun(nameservers, cookies_path):
     
 def main(args):
     """This script is used to create the AWS CFT stack for the website's infrastructure while also updating porkbun's Authoritative Nameservers to use AWS's.
-    
+
     """
     parser = ArgumentParser()
     parser.add_argument('--cookies-file-path', default="porkbun.com_cookies.txt", help='path to the cookies file from cookies.txt for porkbun.com')
     args = parser.parse_args(args)
 
-    # stack_id = create_stack("cloudformation.yml")
-    # nameservers = get_name_servers(stack_id)
+    stack_id = create_stack("cloudformation.yml")
+    nameservers = get_name_servers(stack_id)
     nameservers = "ns-1484.awsdns-57.org\nns-1966.awsdns-53.co.uk\nns-436.awsdns-54.com\nns-599.awsdns-10.net"
     update_name_servers_in_porkbun(nameservers, args.cookies_file_path)
 
